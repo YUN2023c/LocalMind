@@ -1,0 +1,826 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalMind - 本地知识管理系统</title>
+    <link rel="stylesheet" href="src/renderer/style.css">
+    <script src="node_modules/pdfjs-dist/build/pdf.min.mjs" type="module"></script>
+</head>
+<body>
+    <!--
+        同步应用主题类：在浏览器首次绘制前执行此脚本，
+        确保 body 立即拥有正确的 theme-dark 类，避免页面加载时出现主题闪烁（FOUC）。
+        主题判断逻辑：仅当用户明确保存为 'light' 时使用亮色主题，其余情况（含首次启动）默认暗色主题。
+    -->
+    <script>
+        (function () {
+            try {
+                var savedTheme = localStorage.getItem('localmind-theme');
+                if (savedTheme !== 'light') {
+                    document.body.classList.add('theme-dark');
+                }
+            } catch (e) {
+                // localStorage 不可用时，默认使用暗色主题
+                document.body.classList.add('theme-dark');
+            }
+        })();
+    </script>
+
+    <canvas id="binary-rain"></canvas>
+
+    <!-- 加载遮罩层 -->
+    <div class="loading-overlay" id="loadingOverlay" style="display: none;">
+        <div class="loading-spinner">
+            <div class="spinner"></div>
+            <div class="loading-text" id="loadingText">正在处理...</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <header id="customTitleBar">
+            <div class="title-bar-drag"></div>
+            <div class="title-bar-controls">
+                <button class="title-bar-btn" id="windowMinimize" title="最小化">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                </button>
+                <button class="title-bar-btn" id="windowMaximize" title="最大化">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><rect x="3" y="3" width="18" height="18"/></svg>
+                </button>
+                <button class="title-bar-btn" id="windowClose" title="关闭">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+                </button>
+            </div>
+            <div class="stats-bar">
+                <button class="header-action-btn" id="taskListBtn" title="任务状态"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/></svg> 任务状态</button>
+                <button class="header-action-btn" id="generateSummaryBtn" title="生成摘要"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg> 生成摘要</button>
+                <button class="header-action-btn" onclick="triggerUpload()" title="增加文档"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M12 21V9"/><polyline points="7 14 12 9 17 14"/><line x1="3" y1="3" x2="21" y2="3"/></svg> 增加文档</button>
+                <button class="header-action-btn" id="newDocumentBtn" onclick="openNewDocumentModal()" title="新建文档"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg> 新建文档</button>
+                <button class="header-action-btn" onclick="openDeleteModal()" title="删除文档"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><polyline points="4 6 20 6"/><path d="M6 6v14h12V6"/><path d="M9 6V4h6v2"/><line x1="10" y1="10" x2="10" y2="17"/><line x1="14" y1="10" x2="14" y2="17"/></svg> 删除文档</button>
+                <button class="theme-toggle" id="themeToggle" title="切换主题"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg></button>
+            </div>
+        </header>
+
+        <div class="main-content">
+            <aside>
+                <div class="sidebar-scroll-content">
+                    <input type="text" class="search-box" id="searchInput" placeholder="搜索文档...">
+
+                    <div class="sidebar-section" id="tagCloudSection">
+                        <div class="section-title">标签</div>
+                        <div class="tag-cloud" id="tagCloud">
+                        </div>
+                    </div>
+
+                    <div class="sidebar-section">
+                        <div class="section-title">菜单</div>
+                        <ul class="menu-list">
+                            <li class="menu-item active" data-menu="all">
+                                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M3 6h6l2 3h10v10H3z"/></svg>
+                                <span>全部文档</span>
+                            </li>
+                            <li class="menu-item" data-menu="qa">
+                                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8.01"/></svg>
+                                <span>问答</span>
+                            </li>
+                            <li class="menu-item" data-menu="favorites">
+                                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><polygon points="12 3 15 9 22 10 17 14 18 21 12 18 6 21 7 14 2 10 9 9 12 3"/></svg>
+                                <span>收藏夹</span>
+                            </li>
+                            <li class="menu-item" data-menu="recent">
+                                <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><rect x="3" y="5" width="18" height="16"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="8" y1="3" x2="8" y2="7"/><line x1="16" y1="3" x2="16" y2="7"/></svg>
+                                <span>最近</span>
+                            </li>
+                        </ul>
+                    </div>
+                </div>
+
+                <div class="sidebar-footer">
+                    <ul class="menu-list">
+                        <li class="menu-item" data-menu="settings">
+                            <svg class="menu-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"/></svg>
+                            <span>设置</span>
+                        </li>
+                    </ul>
+                </div>
+            </aside>
+
+            <main class="scrollbar">
+                <div class="document-list" id="documentList">
+                </div>
+                <div class="doc-list-status" id="docListStatus"></div>
+                <div class="doc-sentinel" id="docSentinel"></div>
+
+                <div class="qa-container" id="qaContainer" style="display: none;">
+                    <div class="qa-header">
+                        <div class="qa-title">文档问答</div>
+                        <div class="qa-subtitle">基于您的文档内容进行智能问答</div>
+                        <button class="header-action-btn" id="qaHistoryToggle" title="切换历史记录">
+                            <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                                <circle cx="12" cy="12" r="9"/>
+                                <polyline points="12 7 12 12 16 14"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <div class="qa-main-content">
+                        <div class="qa-chat-section">
+                            <div class="qa-input-section">
+                                <div class="qa-input-controls">
+                                    <span class="qa-token-toggle-label">Token节省模式</span>
+                                    <label class="toggle-switch">
+                                        <input type="checkbox" id="tokenSaveToggle" checked onchange="toggleTokenSaveMode()">
+                                        <span class="toggle-slider"></span>
+                                    </label>
+                                </div>
+                                <div class="qa-input-row">
+                                    <div class="qa-input-wrapper">
+                                        <input type="text" class="qa-input" id="qaInput" placeholder="输入您的问题..." onkeypress="handleQaKeyPress(event)" oninput="updateSendButtonState()">
+                                        <button class="qa-send-btn" id="qaSubmitBtn" onclick="submitQuestion()" title="提问" disabled>
+                                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                                                <line x1="12" y1="20" x2="12" y2="4"/>
+                                                <polyline points="6 10 12 4 18 10"/>
+                                            </svg>
+                                        </button>
+                                        <button class="qa-stop-btn" id="qaStopBtn" onclick="stopGeneration()" style="display: none;" title="停止生成">
+                                            <svg viewBox="0 0 24 24"><rect x="6" y="6" width="12" height="12" fill="currentColor"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="qa-loading" id="qaLoading" style="display: none;">
+                                <div class="qa-loading-content">
+                                    <div class="qa-thinking-animation">
+                                        <div class="qa-thinking-dot"></div>
+                                        <div class="qa-thinking-dot"></div>
+                                        <div class="qa-thinking-dot"></div>
+                                    </div>
+                                    <div class="qa-thinking-icon" id="qaThinkingIcon">
+                                        <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                                            <path d="M12 3l1.8 4.2L18 9l-4.2 1.8L12 15l-1.8-4.2L6 9l4.2-1.8L12 3z"/>
+                                            <path d="M19 14l1 2.2 2.2 1-2.2 1L19 20.4l-1-2.2-2.2-1 2.2-1L19 14z"/>
+                                        </svg>
+                                    </div>
+                                    <span class="qa-loading-text" id="qaLoadingText">正在分析文档...</span>
+                                </div>
+                                <div class="qa-loading-progress">
+                                    <div class="qa-loading-progress-bar" id="qaLoadingProgressBar"></div>
+                                </div>
+                            </div>
+                            <div class="qa-result" id="qaResult" style="display: none;">
+                                <div class="qa-answer-section">
+                                    <div class="qa-section-title">回答</div>
+                                    <div class="qa-answer" id="qaAnswer"></div>
+                                </div>
+                                <div class="qa-references-section" id="qaReferencesSection">
+                                    <div class="qa-section-title">参考文档</div>
+                                    <div class="qa-references" id="qaReferences"></div>
+                                </div>
+                                <div class="qa-disclaimer">
+                                    <span class="qa-disclaimer-icon">ℹ</span>
+                                    <span class="qa-disclaimer-text">AI生成内容仅供参考，不构成专业建议</span>
+                                </div>
+                                <div class="qa-result-actions">
+                                    <button class="header-action-btn" id="qaRetryBtn" onclick="retryQuestion()" title="重新回答">
+                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                                            <polyline points="21 4 21 10 15 10"/>
+                                            <polyline points="3 20 3 14 9 14"/>
+                                            <path d="M20.5 9A9 9 0 0 0 5 5.5L3 7M3.5 15A9 9 0 0 0 19 18.5L21 17"/>
+                                        </svg> 重新回答
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="qa-error" id="qaError" style="display: none;">
+                                <div class="qa-error-icon">!</div>
+                                <div class="qa-error-message" id="qaErrorMessage"></div>
+                            </div>
+                        </div>
+                        <div class="qa-history-sidebar" id="qaHistorySidebar">
+                            <div class="qa-history-header">
+                                <span class="qa-history-title">历史记录</span>
+                                <button class="header-action-btn" onclick="clearQaHistory()">清空</button>
+                            </div>
+                            <div class="qa-history-list scrollbar" id="qaHistoryList"></div>
+                        </div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="documentModal">
+        <div class="modal" style="max-width: 900px;">
+            <div class="modal-header">
+                <span class="modal-title" id="modalTitle">文档标题</span>
+                <button class="modal-close" onclick="closeModal()">×</button>
+            </div>
+            <div class="modal-tabs">
+                <div class="modal-tab active" onclick="switchTab('detail')">详情</div>
+                <div class="modal-tab" onclick="switchTab('graph')">知识图谱</div>
+            </div>
+            <div class="modal-body scrollbar">
+                <div class="modal-actions-bar">
+                    <button class="header-action-btn" id="editDocBtn" onclick="openCurrentDocInEditor()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z"/></svg> 编辑</button>
+                    <button class="header-action-btn header-action-btn-danger" id="deleteDocBtn" onclick="deleteCurrentDocument()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><polyline points="4 6 20 6"/><path d="M6 6v14h12V6"/><path d="M9 6V4h6v2"/><line x1="10" y1="10" x2="10" y2="17"/><line x1="14" y1="10" x2="14" y2="17"/></svg> 删除</button>
+                </div>
+                <div id="tabDetail">
+                    <div class="modal-section">
+                        <div class="modal-section-title-row">
+                            <div class="modal-section-title">摘要</div>
+                            <button class="modal-abstract-delete" onclick="deleteCurrentDocAbstract()" title="删除摘要" id="deleteAbstractBtn" style="display: none;">删除摘要</button>
+                        </div>
+                        <div class="modal-content" id="modalAbstract"></div>
+                    </div>
+                    <div class="modal-section">
+                        <div class="modal-section-title">关键词</div>
+                        <div class="modal-keywords" id="modalKeywords"></div>
+                    </div>
+                    <div class="modal-section" id="pdfPreviewSection" style="display: none;">
+                        <div class="modal-section-title">PDF 预览</div>
+                        <div class="pdf-container">
+                            <div class="pdf-toolbar">
+                                <button class="pdf-toolbar-btn" onclick="pdfPrevPage()">上一页</button>
+                                <span class="pdf-page-info" id="pdfPageInfo">1 / 1</span>
+                                <button class="pdf-toolbar-btn" onclick="pdfNextPage()">下一页</button>
+                                <span class="pdf-zoom-controls">
+                                    <button class="pdf-toolbar-btn" onclick="pdfZoomOut()">-</button>
+                                    <span id="pdfZoomLevel">100%</span>
+                                    <button class="pdf-toolbar-btn" onclick="pdfZoomIn()">+</button>
+                                </span>
+                            </div>
+                            <div class="pdf-viewer" id="pdfViewer"></div>
+                        </div>
+                    </div>
+                    <div class="modal-section" id="mdPreviewSection" style="display: none;">
+                        <div class="modal-section-title">Markdown 预览</div>
+                        <div class="md-container" id="mdViewer"></div>
+                    </div>
+                    <div class="modal-section" id="wordPreviewSection" style="display: none;">
+                        <div class="modal-section-title">文档预览</div>
+                        <div class="word-container" id="wordViewer">
+                            <div class="word-loading">正在加载文档预览...</div>
+                        </div>
+                    </div>
+                    <div class="modal-section" id="contentPreviewSection">
+                        <div class="modal-section-title">内容预览</div>
+                        <div class="modal-content" id="modalContent"></div>
+                    </div>
+                    <div class="modal-section">
+                        <div class="modal-section-title">标签</div>
+                        <div class="modal-tags" id="modalTags"></div>
+                    </div>
+                </div>
+                <div id="tabGraph" style="display: none;">
+                    <div class="graph-container">
+                        <svg class="graph-svg" id="graphSvg"></svg>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+
+    <div class="modal-overlay" id="summaryModal">
+        <div class="modal" style="max-width: 700px; max-height: 60vh;">
+            <div class="modal-header">
+                <span class="modal-title">生成文档摘要</span>
+                <button class="modal-close" onclick="closeSummaryModal()">×</button>
+            </div>
+            <div class="modal-body scrollbar">
+                <p class="modal-hint">请选择需要生成摘要的文档（需要配置 API）</p>
+                <div class="export-toolbar">
+                    <label class="export-select-all">
+                        <input type="checkbox" id="selectAllSummary" onchange="selectAllSummary()"> 全选
+                    </label>
+                    <span class="export-count" id="summaryCount">已选择 0 篇</span>
+                    <button class="header-action-btn" onclick="confirmGenerateSummaries()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></svg> 生成摘要</button>
+                </div>
+                <div class="export-list" id="summaryList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="deleteModal">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <span class="modal-title">删除文档</span>
+                <button class="modal-close" onclick="closeDeleteModal()">×</button>
+            </div>
+            <div class="modal-body scrollbar">
+                <p class="modal-hint">请选择要删除的文档</p>
+                <div class="export-toolbar">
+                    <label class="export-select-all">
+                        <input type="checkbox" id="selectAllDelete" onchange="selectAllDelete()"> 全选
+                    </label>
+                    <span class="export-count" id="deleteCount">已选择 0 篇</span>
+                    <button class="header-action-btn header-action-btn-danger" onclick="deleteSelected()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><polyline points="4 6 20 6"/><path d="M6 6v14h12V6"/><path d="M9 6V4h6v2"/><line x1="10" y1="10" x2="10" y2="17"/><line x1="14" y1="10" x2="14" y2="17"/></svg> 删除选中</button>
+                </div>
+                <div class="export-list" id="deleteList"></div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="newDocModal">
+        <div class="modal" style="max-width: 400px;">
+            <div class="modal-header">
+                <span class="modal-title">新建文档</span>
+                <button class="modal-close" onclick="closeNewDocumentModal()">×</button>
+            </div>
+            <div class="modal-body">
+                <div class="new-doc-type-list">
+                    <button class="header-action-btn" onclick="createNewDocumentByType('txt')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M14 3H6v18h12V8z"/><polyline points="14 3 14 8 18 8"/><line x1="9" y1="13" x2="15" y2="13"/><line x1="9" y1="17" x2="15" y2="17"/></svg> TXT 文本文件</button>
+                    <button class="header-action-btn" onclick="createNewDocumentByType('md')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M5 4h11a3 3 0 0 1 3 3v10H8v3a1 1 0 0 1-1 1 3 3 0 0 1-3-3V7a3 3 0 0 1 1-3z"/><line x1="9" y1="9" x2="15" y2="9"/><line x1="9" y1="13" x2="15" y2="13"/></svg> Markdown</button>
+                    <button class="header-action-btn" onclick="createNewDocumentByType('html')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg> HTML 文件</button>
+                    <button class="header-action-btn" onclick="createNewDocumentByType('docx')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="11" x2="15" y2="11"/></svg> DOCX 文件</button>
+                    <button class="header-action-btn" onclick="createNewDocumentByType('doc')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="15" x2="15" y2="15"/><line x1="9" y1="11" x2="15" y2="11"/></svg> DOC 文件</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="settingsModal">
+        <div class="modal" style="max-width: 600px;">
+            <div class="modal-header">
+                <span class="modal-title">设置</span>
+                <button class="modal-close" onclick="closeSettingsModal()">×</button>
+            </div>
+            <div class="modal-body scrollbar">
+                <div class="settings-section">
+                    <div class="settings-section-title">外观</div>
+                    <div class="settings-item">
+                        <span class="settings-item-label">主题</span>
+                        <div class="settings-theme-toggle">
+                            <button class="settings-theme-btn" id="settingsThemeLight" onclick="setTheme('light')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/><line x1="4.6" y1="4.6" x2="6.7" y2="6.7"/><line x1="17.3" y1="17.3" x2="19.4" y2="19.4"/><line x1="4.6" y1="19.4" x2="6.7" y2="17.3"/><line x1="17.3" y1="6.7" x2="19.4" y2="4.6"/></svg> 明亮</button>
+                            <button class="settings-theme-btn" id="settingsThemeDark" onclick="setTheme('dark')"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"/></svg> 黑暗</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">大模型配置</div>
+                    <div class="settings-item">
+                        <span class="settings-item-label">推理模式</span>
+                        <div class="settings-mode-toggle">
+                            <button class="settings-mode-btn" id="modeRemote" onclick="setLlmMode('remote')">远程 API</button>
+                            <button class="settings-mode-btn" id="modeLocal" onclick="setLlmMode('local')">本地模型</button>
+                        </div>
+                    </div>
+                    <div id="remoteConfigSection">
+                        <div class="settings-item">
+                            <span class="settings-item-label">API URL</span>
+                            <input type="text" class="settings-input" id="llmApiUrl" placeholder="https://api.example.com/v1/chat/completions">
+                        </div>
+                        <div class="settings-item">
+                            <span class="settings-item-label">API Key</span>
+                            <input type="password" class="settings-input" id="llmApiKey" placeholder="sk-...">
+                        </div>
+                        <div class="settings-item">
+                            <span class="settings-item-label">模型名称</span>
+                            <input type="text" class="settings-input" id="llmModel" placeholder="gpt-3.5-turbo">
+                        </div>
+                        <div class="settings-item">
+                            <button class="header-action-btn" onclick="saveLlmConfig()" style="display: none;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M12 3v12"/><polyline points="7 10 12 15 17 10"/><line x1="3" y1="21" x2="21" y2="21"/></svg> 保存配置</button>
+                            <button class="header-action-btn" onclick="testApiConnection()" id="testApiBtn"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><polyline points="8 12 11 15 16 9"/></svg> 测试连接</button>
+                        </div>
+                        <div class="settings-api-test-result" id="apiTestResult" style="display: none;"></div>
+                    </div>
+                    <div id="localModelSection" style="display: none;">
+                        <div class="settings-item">
+                            <span class="settings-item-label">模型名称</span>
+                            <span class="settings-item-value" id="localModelName">Qwen2.5-1.5B-Instruct</span>
+                        </div>
+                        <div class="settings-item">
+                            <span class="settings-item-label">模型状态</span>
+                            <span class="settings-item-value" id="localModelStatus">未下载</span>
+                        </div>
+                        <div class="settings-item">
+                            <button class="header-action-btn" id="downloadModelBtn" onclick="downloadLocalModel()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg> 下载模型</button>
+                            <button class="header-action-btn" id="loadModelBtn" onclick="loadLocalModel()" style="display: none;"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="12" cy="12" r="4"/><line x1="12" y1="2" x2="12" y2="5"/><line x1="12" y1="19" x2="12" y2="22"/><line x1="2" y1="12" x2="5" y2="12"/><line x1="19" y1="12" x2="22" y2="12"/></svg> 加载模型</button>
+                        </div>
+                        <div class="settings-progress-container" id="modelDownloadProgress" style="display: none;">
+                            <div class="settings-progress-bar" id="modelDownloadProgressBar"></div>
+                            <div class="settings-progress-text" id="modelDownloadProgressText"></div>
+                        </div>
+                        <div class="settings-hint" id="localModelHint">提示：本地模型约 1GB，下载完成后点击"加载模型"启用。首次加载可能需要较长时间。</div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">学习资料文件夹</div>
+                    <div class="settings-item">
+                        <span class="settings-item-label">文件夹路径</span>
+                        <div class="settings-path-input">
+                            <input type="text" class="settings-input settings-path-text" id="studyFolderPath" placeholder="点击右侧按钮选择文件夹" readonly>
+                            <button class="settings-path-btn" onclick="selectStudyFolder()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M3 6h6l2 3h10v10H3z"/></svg></button>
+                        </div>
+                    </div>
+                    <div class="settings-item">
+                        <button class="header-action-btn" onclick="startScanDocuments()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> 扫描文档</button>
+                    </div>
+                    <div class="settings-progress-container">
+                        <div class="settings-progress-bar" id="settingsProgressBar"></div>
+                        <div class="settings-progress-text" id="settingsProgressText"></div>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">数据管理</div>
+                    <div class="settings-item">
+                        <span class="settings-item-label">收藏夹</span>
+                        <button class="header-action-btn" onclick="clearFavorites()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><polyline points="4 6 20 6"/><path d="M6 6v14h12V6"/><path d="M9 6V4h6v2"/><line x1="10" y1="10" x2="10" y2="17"/><line x1="14" y1="10" x2="14" y2="17"/></svg> 清空收藏</button>
+                    </div>
+                    <div class="settings-item">
+                        <span class="settings-item-label">重置配置</span>
+                        <button class="header-action-btn header-action-btn-danger" onclick="clearCache()">重置</button>
+                    </div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">关于</div>
+                    <div class="settings-item">
+                        <span class="settings-item-label">大模型</span>
+                        <span class="settings-item-value">Qwen2.5-1.5B-Instruct (Apache 2.0)</span>
+                    </div>
+                    <div class="settings-hint">本地模型基于阿里云通义千问开源模型构建</div>
+                </div>
+                <div class="settings-section">
+                    <div class="settings-section-title">开源软件声明</div>
+                    <details class="oss-details">
+                        <summary class="oss-summary">查看开源软件列表</summary>
+                        <div class="oss-list">
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">Electron</span>
+                                    <span class="oss-version">^42.4.1</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">pdfjs-dist</span>
+                                    <span class="oss-version">^6.0.227</span>
+                                </div>
+                                <button class="oss-license" data-license="Apache-2.0" onclick="showLicense('Apache-2.0')">Apache 2.0</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">marked</span>
+                                    <span class="oss-version">^18.0.5</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">sqlite3</span>
+                                    <span class="oss-version">^5.1.7</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">mammoth</span>
+                                    <span class="oss-version">^1.8.0</span>
+                                </div>
+                                <button class="oss-license" data-license="BSD-2-Clause" onclick="showLicense('BSD-2-Clause')">BSD-2-Clause</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">docx</span>
+                                    <span class="oss-version">^9.7.1</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">word-extractor</span>
+                                    <span class="oss-version">^1.0.4</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">pdf-parse</span>
+                                    <span class="oss-version">^1.1.1</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">electron-store</span>
+                                    <span class="oss-version">^8.1.0</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">node-llama-cpp</span>
+                                    <span class="oss-version">^3.18.1</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">keytar</span>
+                                    <span class="oss-version">^7.9.0</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">llama.cpp</span>
+                                    <span class="oss-version">内置</span>
+                                </div>
+                                <button class="oss-license" data-license="MIT" onclick="showLicense('MIT')">MIT</button>
+                            </div>
+                            <div class="oss-item">
+                                <div class="oss-info">
+                                    <span class="oss-name">Qwen2.5</span>
+                                    <span class="oss-version">1.5B-Instruct</span>
+                                </div>
+                                <button class="oss-license" data-license="Apache-2.0" onclick="showLicense('Apache-2.0')">Apache 2.0</button>
+                            </div>
+                        </div>
+                    </details>
+                    <div class="settings-hint">本应用使用了以上开源软件，遵循各自的开源许可证</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal-overlay" id="licenseModal">
+        <div class="modal" style="max-width: 700px;">
+            <div class="modal-header">
+                <span class="modal-title" id="licenseModalTitle">许可证详情</span>
+                <button class="modal-close" onclick="closeLicenseModal()">×</button>
+            </div>
+            <div class="modal-body scrollbar">
+                <pre class="license-text" id="licenseText"></pre>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const LICENSES = {
+            'MIT': `MIT License
+
+Copyright (c) <year> <copyright holders>
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction, including without limitation the rights
+to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+THE SOFTWARE.`,
+            'Apache-2.0': `Apache License
+                           Version 2.0, January 2004
+                        http://www.apache.org/licenses/
+
+   TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION
+
+   1. Definitions.
+
+      "License" shall mean the terms and conditions for use, reproduction,
+      and distribution as defined by Sections 1 through 9 of this document.
+
+      "Licensor" shall mean the copyright owner or entity authorized by
+      the copyright owner that is granting the License.
+
+      "Legal Entity" shall mean the union of the acting entity and all
+      other entities that control, are controlled by, or are under common
+      control with that entity. For the purposes of this definition,
+      "control" means (i) the power, direct or indirect, to cause the
+      direction or management of such entity, whether by contract or
+      otherwise, or (ii) ownership of fifty percent (50%) or more of the
+      outstanding shares, or (iii) beneficial ownership of such entity.
+
+      "You" (or "Your") shall mean an individual or Legal Entity
+      exercising permissions granted by this License.
+
+      "Source" form shall mean the preferred form for making modifications,
+      including but not limited to software source code, documentation
+      source, and configuration files.
+
+      "Object" form shall mean any form resulting from mechanical
+      transformation or translation of a Source form, including but
+      not limited to compiled object code, generated documentation,
+      and conversions to other media types.
+
+      "Work" shall mean the work of authorship, whether in Source or
+      Object form, made available under the License, as indicated by a
+      copyright notice that is included in or attached to the work
+      (an example is provided in the Appendix below).
+
+      "Derivative Works" shall mean any work, whether in Source or Object
+      form, that is based on (or derived from) the Work and for which the
+      editorial revisions, annotations, elaborations, or other modifications
+      represent, as a whole, an original work of authorship. For the purposes
+      of this License, Derivative Works shall not include works that remain
+      separable from, or merely link (or bind by name) to the interfaces of,
+      the Work and Derivative Works thereof.
+
+      "Contribution" shall mean any work of authorship, including
+      the original version of the Work and any modifications or additions
+      to that Work or Derivative Works thereof, that is intentionally
+      submitted to Licensor for inclusion in the Work by the copyright owner
+      or by an individual or Legal Entity authorized to submit on behalf of
+      the copyright owner. For the purposes of this definition, "submitted"
+      means any form of electronic, verbal, or written communication sent
+      to the Licensor or its representatives, including but not limited to
+      communication on electronic mailing lists, source code control systems,
+      and issue tracking systems that are managed by, or on behalf of, the
+      Licensor for the purpose of discussing and improving the Work, but
+      excluding communication that is conspicuously marked or otherwise
+      designated in writing by the copyright owner as "Not a Contribution."
+
+      "Contributor" shall mean Licensor and any individual or Legal Entity
+      on behalf of whom a Contribution has been received by Licensor and
+      subsequently incorporated within the Work.
+
+   2. Grant of Copyright License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      copyright license to reproduce, prepare Derivative Works of,
+      publicly display, publicly perform, sublicense, and distribute the
+      Work and such Derivative Works in Source or Object form.
+
+   3. Grant of Patent License. Subject to the terms and conditions of
+      this License, each Contributor hereby grants to You a perpetual,
+      worldwide, non-exclusive, no-charge, royalty-free, irrevocable
+      (except as stated in this section) patent license to make, have made,
+      use, offer to sell, sell, import, and otherwise transfer the Work,
+      where such license applies only to those patent claims licensable by
+      such Contributor that are necessarily infringed by their
+      Contribution(s) alone or by combination of their Contribution(s) with
+      the Work to which such Contribution(s) was submitted. If You
+      institute patent litigation against any entity (including a
+      cross-claim or counterclaim in a lawsuit) alleging that the Work
+      or a Contribution incorporated within the Work constitutes direct
+      or contributory patent infringement, then any patent licenses
+      granted to You under this License for that Work shall terminate
+      as of the date such litigation is filed.
+
+   4. Redistribution. You may reproduce and distribute copies of the
+      Work or Derivative Works thereof in any medium, with or without
+      modifications, and in Source or Object form, provided that You
+      meet the following conditions:
+
+      (a) You must give any other recipients of the Work or Derivative
+          Works a copy of this License; and
+
+      (b) You must cause any modified files to carry prominent notices
+          stating that You changed the files; and
+
+      (c) You must retain, in the Source form of any Derivative Works
+          that You distribute, all copyright, patent, trademark, and
+          attribution notices from the Source form of the Work,
+          excluding those notices that do not pertain to any part of
+          the Derivative Works; and
+
+      (d) If the Work includes a "NOTICE" text file as part of its
+          distribution, then any Derivative Works that You distribute must
+          include a readable copy of the attribution notices contained
+          within such NOTICE file, excluding those notices that do not
+          pertain to any part of the Derivative Works, in at least one
+          of the following places: within a NOTICE text file distributed
+          as part of the Derivative Works; within the Source form or
+          documentation, if provided along with the Derivative Works; or,
+          within a display generated by the Derivative Works, if and
+          wherever such third-party notices normally appear. The contents
+          of the NOTICE file are for informational purposes only and
+          do not modify the License. You may add Your own attribution
+          notices within Derivative Works that You distribute, alongside
+          or as an addendum to the NOTICE text from the Work, provided
+          that such additional attribution notices cannot be construed
+          as modifying the License.
+
+      You may add Your own copyright statement to Your modifications and
+      may provide additional or different license terms and conditions
+      for use, reproduction, or distribution of Your modifications, or
+      for any such Derivative Works as a whole, provided Your use,
+      reproduction, and distribution of the Work otherwise complies with
+      the conditions stated in this License.
+
+   5. Submission of Contributions. Unless You explicitly state otherwise,
+      any Contribution intentionally submitted for inclusion in the Work
+      by You to the Licensor shall be under the terms and conditions of
+      this License, without any additional terms or conditions.
+      Notwithstanding the above, nothing herein shall supersede or modify
+      the terms of any separate license agreement you may have executed
+      with Licensor regarding such Contributions.
+
+   6. Trademarks. This License does not grant permission to use the trade
+      names, trademarks, service marks, or product names of the Licensor,
+      except as required for reasonable and customary use in describing the
+      origin of the Work and reproducing the content of the NOTICE file.
+
+   7. Disclaimer of Warranty. Unless required by applicable law or
+      agreed to in writing, Licensor provides the Work (and each
+      Contributor provides its Contributions) on an "AS IS" BASIS,
+      WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or
+      implied, including, without limitation, any warranties or conditions
+      of TITLE, NON-INFRINGEMENT, MERCHANTABILITY, or FITNESS FOR A
+      PARTICULAR PURPOSE. You are solely responsible for determining the
+      appropriateness of using or redistributing the Work and assume any
+      risks associated with Your exercise of permissions under this License.
+
+   8. Limitation of Liability. In no event and under no legal theory,
+      whether in tort (including negligence), contract, or otherwise,
+      unless required by applicable law (such as deliberate and grossly
+      negligent acts) or agreed to in writing, shall any Contributor be
+      liable to You for damages, including any direct, indirect, special,
+      incidental, or consequential damages of any character arising as a
+      result of this License or out of the use or inability to use the
+      Work (including but not limited to damages for loss of goodwill,
+      work stoppage, computer failure or malfunction, or any and all
+      other commercial damages or losses), even if such Contributor
+      has been advised of the possibility of such damages.
+
+   9. Accepting Warranty or Additional Liability. While redistributing
+      the Work or Derivative Works thereof, You may choose to offer,
+      and charge a fee for, acceptance of support, warranty, indemnity,
+      or other liability obligations and/or rights consistent with this
+      License. However, in accepting such obligations, You may act only
+      on Your own behalf and on Your sole responsibility, not on behalf
+      of any other Contributor, and only if You agree to indemnify,
+      defend, and hold each Contributor harmless for any liability
+      incurred by, or claims asserted against, such Contributor by reason
+      of your accepting any such warranty or additional liability.
+
+   END OF TERMS AND CONDITIONS
+
+   APPENDIX: How to apply the Apache License to your work.
+
+      To apply the Apache License to your work, attach the following
+      boilerplate notice, with the fields enclosed by brackets "[]"
+      replaced with your own identifying information. (Don't include
+      the brackets!)  The text should be enclosed in the appropriate
+      comment syntax for the file format. We also recommend that a
+      file or class name and description of purpose be included on the
+      same "printed page" as the copyright notice for easier
+      identification within third-party archives.
+
+   Copyright [yyyy] [name of copyright owner]
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.`,
+            'BSD-2-Clause': `Copyright (c) <year> <owner>. All rights reserved.
+
+Redistribution and use in source and binary forms, with or without
+modification, are permitted provided that the following conditions are met:
+
+1. Redistributions of source code must retain the above copyright notice, this
+   list of conditions and the following disclaimer.
+
+2. Redistributions in binary form must reproduce the above copyright notice,
+   this list of conditions and the following disclaimer in the documentation
+   and/or other materials provided with the distribution.
+
+THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.`
+        };
+
+        function showLicense(licenseType) {
+            const licenseText = LICENSES[licenseType];
+            if (licenseText) {
+                document.getElementById('licenseText').textContent = licenseText;
+                const titles = {
+                    'MIT': 'MIT License',
+                    'Apache-2.0': 'Apache License 2.0',
+                    'BSD-2-Clause': 'BSD 2-Clause License'
+                };
+                document.getElementById('licenseModalTitle').textContent = titles[licenseType] || '许可证详情';
+                document.getElementById('licenseModal').style.display = 'flex';
+            }
+        }
+
+        function closeLicenseModal() {
+            document.getElementById('licenseModal').style.display = 'none';
+        }
+    </script>
+
+    <script src="src/renderer/app.js"></script>
+</body>
+</html>

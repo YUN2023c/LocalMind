@@ -1,0 +1,11 @@
+**/node_modules/
+**/bin/
+**/models/*.gguf
+**/data/*.db
+**/debug.log
+**/build-output/
+**/.vscode/
+**/*.log
+**/*.tmp
+**/.DS_Store
+**/Thumbs.db

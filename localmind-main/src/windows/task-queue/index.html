@@ -1,0 +1,639 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>任务队列</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            /* TRAE Design System tokens */
+            --radius-2: 2px;
+            --radius-4: 4px;
+            --radius-6: 6px;
+            --radius-8: 8px;
+            --radius-10: 10px;
+            --radius-full: 9999px;
+
+            --spacer-4: 4px;
+            --spacer-6: 6px;
+            --spacer-8: 8px;
+            --spacer-12: 12px;
+            --spacer-16: 16px;
+            --spacer-24: 24px;
+
+            --font-family-default: "SF Pro Text", system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            --font-weight-medium: 500;
+            --font-weight-strong: 600;
+
+            --body-xs-font-size: 10px;
+            --body-xs-line-height: 14px;
+            --body-sm-font-size: 11px;
+            --body-sm-line-height: 16px;
+            --body-sm-strong-font-weight: 500;
+            --body-base-font-size: 13px;
+            --body-base-line-height: 20px;
+            --heading-xs-font-size: 13px;
+            --heading-xs-line-height: 20px;
+            --heading-xs-font-weight: 600;
+
+            --bg-base-default: #1A1B1D;
+            --bg-base-secondary: #222427;
+            --bg-base-tertiary: #2A2D31;
+            --bg-overlay-l1: rgba(224, 226, 242, 0.04);
+            --bg-overlay-l2: rgba(224, 226, 242, 0.06);
+            --bg-overlay-l3: rgba(224, 226, 242, 0.08);
+            --bg-overlay-l4: rgba(224, 226, 242, 0.12);
+            --bg-brand: #32F08C;
+            --bg-brand-hover: #0FDC78;
+            --bg-brand-popup: rgba(50, 240, 140, 0.12);
+
+            --text-default: #D1D3DB;
+            --text-default-hover: #F5F9FE;
+            --text-secondary: #9599A6;
+            --text-tertiary: #666B75;
+            --text-onbrand: #0C0C0D;
+            --text-brand: #32F08C;
+            --text-brand-hover: #0FDC78;
+
+            --icon-default: #D1D3DB;
+            --icon-secondary: #9599A6;
+            --icon-tertiary: #666B75;
+            --icon-onbrand: #0C0C0D;
+            --icon-brand: #32F08C;
+
+            --border-neutral-l1: rgba(224, 226, 242, 0.1);
+            --border-neutral-l2: rgba(224, 226, 242, 0.16);
+            --border-neutral-l3: rgba(224, 226, 242, 0.2);
+            --border-brand: #32F08C;
+
+            --status-success-default: #33C192;
+            --status-success-surface-l1: rgba(0, 165, 110, 0.18);
+            --status-warning-default: #D27E24;
+            --status-warning-surface-l1: rgba(210, 126, 36, 0.16);
+            --status-error-default: #F65A5A;
+            --status-error-surface-l1: rgba(246, 70, 70, 0.18);
+            --status-primary-default: #387BFF;
+            --status-primary-surface-l1: rgba(53, 121, 255, 0.18);
+
+            /* Task-queue window semantic aliases */
+            --window-bg: var(--bg-base-default);
+            --header-bg: var(--bg-base-secondary);
+            --body-bg: var(--bg-base-default);
+            --card-bg: var(--bg-base-secondary);
+            --text-main: var(--text-default);
+            --text-muted: var(--text-secondary);
+            --text-sub: var(--text-tertiary);
+            --border: var(--border-neutral-l1);
+            --overlay-hover: var(--bg-overlay-l2);
+            --overlay-active: var(--bg-overlay-l3);
+        }
+
+        /* Light theme variant (compatible with existing theme:change logic) */
+        body:not(.theme-dark) {
+            --window-bg: #FFFFFF;
+            --header-bg: #F5F5F7;
+            --body-bg: #F5F5F7;
+            --card-bg: #FFFFFF;
+            --text-main: #1A1B1D;
+            --text-muted: #5E696E;
+            --text-sub: #8B9499;
+            --border: #E0E1E6;
+            --overlay-hover: rgba(0, 0, 0, 0.04);
+            --overlay-active: rgba(0, 0, 0, 0.06);
+            --bg-overlay-l2: rgba(0, 0, 0, 0.04);
+            --bg-overlay-l3: rgba(0, 0, 0, 0.06);
+            --text-brand: #000000;
+            --icon-brand: #000000;
+            --bg-brand: #000000;
+            --bg-brand-popup: rgba(0, 0, 0, 0.08);
+        }
+
+        body {
+            font-family: var(--font-family-default);
+            background: transparent;
+            color: var(--text-main);
+            overflow: hidden;
+            user-select: none;
+            font-size: var(--body-base-font-size);
+            line-height: var(--body-base-line-height);
+        }
+
+        .container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            background: var(--window-bg);
+            border-radius: var(--radius-8);
+            overflow: hidden;
+            box-shadow: 0 16px 48px rgba(0, 0, 0, 0.48);
+            border: 1px solid var(--border);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .container.closing {
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        .header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: var(--spacer-12);
+            height: 40px;
+            padding: 0 var(--spacer-12);
+            background: var(--header-bg);
+            border-bottom: 1px solid var(--border);
+            -webkit-app-region: drag;
+            flex-shrink: 0;
+        }
+
+        .title {
+            display: flex;
+            align-items: center;
+            gap: var(--spacer-8);
+            font-size: var(--heading-xs-font-size);
+            font-weight: var(--heading-xs-font-weight);
+            color: var(--text-main);
+            line-height: var(--heading-xs-line-height);
+        }
+
+        .title svg {
+            width: 16px;
+            height: 16px;
+            color: var(--icon-brand);
+            flex-shrink: 0;
+        }
+
+        .actions {
+            display: flex;
+            align-items: center;
+            gap: var(--spacer-6);
+            -webkit-app-region: no-drag;
+        }
+
+        .btn {
+            width: 28px;
+            height: 28px;
+            background: var(--bg-overlay-l2);
+            border: none;
+            border-radius: var(--radius-4);
+            color: var(--icon-secondary);
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.12s ease, color 0.12s ease;
+            padding: 0;
+        }
+
+        .btn:hover {
+            background: var(--bg-overlay-l3);
+            color: var(--icon-default);
+        }
+
+        .btn svg {
+            width: 14px;
+            height: 14px;
+        }
+
+        .body {
+            flex: 1;
+            overflow-y: auto;
+            padding: var(--spacer-12);
+            background: var(--body-bg);
+            /* 隐藏滚动条但保留滚动功能 */
+            scrollbar-width: none;
+            -ms-overflow-style: none;
+        }
+
+        .body::-webkit-scrollbar {
+            display: none;
+        }
+
+        .empty {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: var(--spacer-24) var(--spacer-16);
+            color: var(--text-sub);
+            text-align: center;
+            border: 1px dashed var(--border);
+            border-radius: var(--radius-4);
+            margin-top: var(--spacer-12);
+        }
+
+        .empty-icon {
+            width: 40px;
+            height: 40px;
+            margin-bottom: var(--spacer-12);
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            border: 1px solid var(--border);
+            border-radius: var(--radius-4);
+            color: var(--icon-secondary);
+        }
+
+        .empty-icon svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .task-item {
+            background: var(--card-bg);
+            border-radius: var(--radius-4);
+            padding: var(--spacer-12) var(--spacer-16);
+            margin-bottom: var(--spacer-8);
+            border: 1px solid var(--border);
+        }
+
+        .task-item:last-child {
+            margin-bottom: 0;
+        }
+
+        .task-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            gap: var(--spacer-12);
+            margin-bottom: var(--spacer-10);
+        }
+
+        .task-name {
+            font-size: var(--body-base-font-size);
+            font-weight: var(--font-weight-medium);
+            color: var(--text-main);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            min-width: 0;
+            line-height: var(--body-base-line-height);
+        }
+
+        .task-status {
+            display: inline-flex;
+            align-items: center;
+            padding: 0 var(--spacer-6);
+            height: 18px;
+            border-radius: var(--radius-2);
+            font-size: var(--body-xs-font-size);
+            line-height: 1;
+            background: var(--bg-overlay-l2);
+            color: var(--text-secondary);
+            border: 1px solid var(--border);
+            flex-shrink: 0;
+            font-weight: var(--font-weight-medium);
+        }
+
+        .task-status.pending {
+            background: var(--bg-overlay-l2);
+            color: var(--text-secondary);
+        }
+
+        .task-status.running {
+            background: var(--bg-brand-popup);
+            color: var(--text-brand);
+            border-color: var(--bg-brand-popup);
+        }
+
+        .task-status.completed {
+            background: var(--status-success-surface-l1);
+            color: var(--status-success-default);
+            border-color: var(--status-success-surface-l1);
+        }
+
+        .task-status.failed {
+            background: var(--status-error-surface-l1);
+            color: var(--status-error-default);
+            border-color: var(--status-error-surface-l1);
+        }
+
+        .task-status.cancelled {
+            background: var(--bg-overlay-l2);
+            color: var(--text-tertiary);
+        }
+
+        /* 动态条状加载动画 */
+        .task-loader {
+            display: flex;
+            gap: var(--spacer-4);
+            height: 16px;
+            align-items: center;
+            margin-bottom: var(--spacer-8);
+        }
+
+        .task-loader-bar {
+            height: 6px;
+            background: var(--bg-overlay-l3);
+            border-radius: var(--radius-2);
+            overflow: hidden;
+        }
+
+        .task-loader-bar.pending {
+            width: 60px;
+            opacity: 0.6;
+        }
+
+        .task-loader-bar.running {
+            width: 60px;
+            background: linear-gradient(90deg, var(--bg-brand) 0%, var(--bg-overlay-l3) 50%, var(--bg-brand) 100%);
+            background-size: 200% 100%;
+            animation: loader-wave 1.2s ease-in-out infinite;
+        }
+
+        .task-loader-bar.completed {
+            width: 60px;
+            background: var(--status-success-default);
+            animation: loader-pulse 0.5s ease-out;
+        }
+
+        .task-loader-bar.failed {
+            width: 60px;
+            background: var(--status-error-default);
+            animation: loader-pulse 0.5s ease-out;
+        }
+
+        @keyframes loader-wave {
+            0% { background-position: 100% 0; }
+            100% { background-position: -100% 0; }
+        }
+
+        @keyframes loader-pulse {
+            0% { opacity: 0; transform: scaleX(0); }
+            50% { opacity: 1; transform: scaleX(1); }
+            100% { opacity: 1; transform: scaleX(1); }
+        }
+
+        .task-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: var(--body-sm-font-size);
+            color: var(--text-muted);
+            line-height: var(--body-sm-line-height);
+        }
+
+        .task-error {
+            font-size: var(--body-sm-font-size);
+            line-height: var(--body-sm-line-height);
+            color: #ffffff;
+            margin-top: var(--spacer-8);
+            padding: var(--spacer-8) var(--spacer-10);
+            background: var(--status-error-default);
+            border-radius: var(--radius-4);
+        }
+
+        body:not(.theme-dark) .task-error {
+            color: #ffffff;
+        }
+
+        .footer {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 40px;
+            padding: 0 var(--spacer-12);
+            border-top: 1px solid var(--border);
+            background: var(--header-bg);
+            flex-shrink: 0;
+        }
+
+        .count {
+            font-size: var(--body-sm-font-size);
+            line-height: var(--body-sm-line-height);
+            color: var(--text-muted);
+            font-weight: var(--font-weight-medium);
+        }
+
+        .count strong {
+            color: var(--text-brand);
+            font-weight: var(--font-weight-strong);
+        }
+
+        .clear-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            height: 24px;
+            padding: 0 var(--spacer-12);
+            background: var(--bg-overlay-l2);
+            border: none;
+            border-radius: var(--radius-4);
+            color: var(--text-muted);
+            font-size: var(--body-sm-font-size);
+            line-height: 1;
+            font-weight: var(--font-weight-medium);
+            cursor: pointer;
+            transition: background 0.12s ease, color 0.12s ease;
+        }
+
+        .clear-btn:hover {
+            background: var(--bg-overlay-l3);
+            color: var(--text-main);
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="title">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                    <polygon points="13 2 4 14 12 14 11 22 20 10 12 10 13 2"/>
+                </svg>
+                <span>任务队列</span>
+            </div>
+            <div class="actions">
+                <button class="btn" id="minimizeBtn" title="最小化">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                        <line x1="5" y1="12" x2="19" y2="12"/>
+                    </svg>
+                </button>
+                <button class="btn" id="closeBtn" title="关闭">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                        <line x1="6" y1="6" x2="18" y2="18"/>
+                        <line x1="18" y1="6" x2="6" y2="18"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
+        <div class="body" id="taskBody">
+            <div class="empty">
+                <div class="empty-icon">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                        <path d="M14 3H6v18h12V8z"/>
+                        <polyline points="14 3 14 8 18 8"/>
+                        <line x1="9" y1="13" x2="15" y2="13"/>
+                        <line x1="9" y1="17" x2="15" y2="17"/>
+                    </svg>
+                </div>
+                <div>暂无任务</div>
+            </div>
+        </div>
+        <div class="footer">
+            <div class="count"><strong id="activeCount">0</strong> 个任务进行中</div>
+            <button class="clear-btn" id="clearBtn">清除已完成</button>
+        </div>
+    </div>
+
+    <script>
+        const { ipcRenderer } = require('electron');
+        const fs = require('fs');
+        
+        let logPath = null;
+        let pollInterval = null;
+        let autoCloseTimer = null;
+
+        const statusTextMap = {
+            pending: '排队中',
+            running: '进行中',
+            completed: '已完成',
+            failed: '失败',
+            cancelled: '已取消'
+        };
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function readTasksFromFile() {
+            try {
+                if (!logPath || !fs.existsSync(logPath)) {
+                    return [];
+                }
+                const content = fs.readFileSync(logPath, 'utf-8');
+                return JSON.parse(content);
+            } catch (error) {
+                console.error('[TaskWindow] 读取日志文件失败:', error);
+                return [];
+            }
+        }
+
+        function renderTasks() {
+            const allTasks = readTasksFromFile();
+            // 过滤掉排队中的任务，不显示在窗口中
+            const tasks = allTasks.filter(t => t.status !== 'pending');
+            const body = document.getElementById('taskBody');
+            const countEl = document.getElementById('activeCount');
+            
+            const activeTasks = allTasks.filter(t => t.status === 'running');
+            countEl.textContent = activeTasks.length;
+
+            if (tasks.length === 0) {
+                body.innerHTML = `
+                    <div class="empty">
+                        <div class="empty-icon">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter">
+                                <path d="M14 3H6v18h12V8z"/>
+                                <polyline points="14 3 14 8 18 8"/>
+                                <line x1="9" y1="13" x2="15" y2="13"/>
+                                <line x1="9" y1="17" x2="15" y2="17"/>
+                            </svg>
+                        </div>
+                        <div>暂无任务</div>
+                    </div>
+                `;
+                return;
+            }
+
+            body.innerHTML = tasks.map(task => {
+                const statusClass = task.status.toLowerCase();
+                const statusText = statusTextMap[task.status] || task.status;
+                
+                return `
+                    <div class="task-item">
+                        <div class="task-header">
+                            <span class="task-name" title="${escapeHtml(task.name)}">${escapeHtml(task.name)}</span>
+                            <span class="task-status ${statusClass}">${statusText}</span>
+                        </div>
+                        <div class="task-loader">
+                            <div class="task-loader-bar ${statusClass}"></div>
+                        </div>
+                        <div class="task-info">
+                            <span>${task.total || 1} 项</span>
+                        </div>
+                        ${task.error ? `<div class="task-error">${escapeHtml(task.error)}</div>` : ''}
+                    </div>
+                `;
+            }).join('');
+
+            checkAutoClose(tasks);
+        }
+
+        function checkAutoClose(tasks) {
+            const allCompleted = tasks.length > 0 && tasks.every(t => 
+                t.status === 'completed' || t.status === 'failed' || t.status === 'cancelled'
+            );
+            
+            if (allCompleted) {
+                if (!autoCloseTimer) {
+                    autoCloseTimer = setTimeout(() => {
+                        const container = document.querySelector('.container');
+                        if (container) {
+                            container.classList.add('closing');
+                        }
+                        setTimeout(() => {
+                            ipcRenderer.send('task-window:close');
+                        }, 300);
+                    }, 2000);
+                }
+            } else {
+                if (autoCloseTimer) {
+                    clearTimeout(autoCloseTimer);
+                    autoCloseTimer = null;
+                    const container = document.querySelector('.container');
+                    if (container) {
+                        container.classList.remove('closing');
+                    }
+                }
+            }
+        }
+
+        // 初始化
+        async function init() {
+            // 获取日志文件路径
+            logPath = await ipcRenderer.invoke('task:getLogPath');
+            console.log('[TaskWindow] 日志文件路径:', logPath);
+            
+            // 立即渲染一次
+            renderTasks();
+            
+            // 每秒读取一次日志文件
+            pollInterval = setInterval(renderTasks, 1000);
+        }
+
+        // 主题变化监听
+        ipcRenderer.on('theme:change', (event, theme) => {
+            if (theme === 'dark') {
+                document.body.classList.add('theme-dark');
+            } else {
+                document.body.classList.remove('theme-dark');
+            }
+        });
+
+        init();
+
+        // 按钮事件
+        document.getElementById('minimizeBtn').addEventListener('click', () => {
+            ipcRenderer.send('task-window:minimize');
+        });
+
+        document.getElementById('closeBtn').addEventListener('click', () => {
+            ipcRenderer.send('task-window:close');
+        });
+
+        document.getElementById('clearBtn').addEventListener('click', async () => {
+            await ipcRenderer.invoke('task:clearCompleted');
+            renderTasks();
+        });
+    </script>
+</body>
+</html>

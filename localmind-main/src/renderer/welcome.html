@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LocalMind - 欢迎</title>
+    <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+    <div class="container">
+        <div class="welcome-card" id="welcomeCard">
+            <div class="welcome-intro">
+                <h1>欢迎使用 LocalMind</h1>
+                <p>本地知识管理系统，让您的学习资料更智能、更有序</p>
+                <div class="feature-list">
+                    <div class="feature-item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M3 6h6l2 3h10v10H3z"/></svg> 自动扫描学习资料文件夹</div>
+                    <div class="feature-item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><rect x="3" y="3" width="8" height="8"/><rect x="13" y="3" width="8" height="8"/><rect x="3" y="13" width="8" height="8"/><rect x="13" y="13" width="8" height="8"/></svg> AI 智能分析文档内容</div>
+                    <div class="feature-item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> 语义搜索与知识关联</div>
+                    <div class="feature-item"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><line x1="3" y1="21" x2="21" y2="21"/><rect x="5"  y="11" width="3" height="8"/><rect x="10.5" y="6"  width="3" height="13"/><rect x="16" y="14" width="3" height="5"/></svg> 知识图谱可视化</div>
+                </div>
+            </div>
+
+            <div class="welcome-actions">
+                <button class="header-action-btn" onclick="goToSetup()">
+                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
+                    开始使用
+                </button>
+            </div>
+        </div>
+
+        <div class="setup-card" id="setupCard" style="display: none;">
+            <div class="setup-form">
+                <div class="form-step active" id="stepApi">
+                    <h2>第一步：配置大模型 API（可选）</h2>
+                    <p class="step-desc">输入您的大模型 API 配置以启用远程 AI 功能。若跳过此步骤，系统将默认使用本地模型进行分析。</p>
+                    
+                    <div class="form-group">
+                        <label>API URL</label>
+                        <input type="text" id="apiUrl" placeholder="https://api.example.com/v1/chat/completions" class="form-input">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>API Key</label>
+                        <input type="password" id="apiKey" placeholder="sk-xxxxxxxxxxxxxxxxxxxx" class="form-input">
+                    </div>
+                    
+                    <div class="form-group">
+                        <label>模型名称</label>
+                        <input type="text" id="modelName" placeholder="gpt-4o-mini" class="form-input">
+                        <p class="input-hint">模型 ID 可在 API 提供商的文档中找到，如：gpt-4o-mini、claude-3-sonnet-20240229、gemini-pro</p>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button class="btn btn-link" onclick="skipApi()">跳过 API 配置 →</button>
+                        <button class="btn btn-primary" onclick="nextStep()">下一步 →</button>
+                    </div>
+                </div>
+
+                <div class="form-step" id="stepFolder">
+                    <h2>第二步：选择学习资料文件夹</h2>
+                    <p class="step-desc">请选择存放学习资料的文件夹，系统将定期扫描该文件夹</p>
+                    
+                    <div class="form-group">
+                        <label>学习资料路径</label>
+                        <div class="folder-selector">
+                            <input type="text" id="studyFolder" placeholder="点击选择文件夹..." class="form-input" readonly>
+                            <button class="btn btn-secondary" onclick="selectFolder()"><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><path d="M3 6h6l2 3h10v10H3z"/></svg> 选择</button>
+                        </div>
+                    </div>
+                    
+                    <div class="form-actions">
+                        <button class="btn btn-secondary" onclick="prevStep()">← 上一步</button>
+                        <button class="btn btn-primary" onclick="completeSetup()">完成 →</button>
+                    </div>
+                </div>
+
+                <div class="form-step" id="stepComplete">
+                    <div class="complete-icon">✓</div>
+                    <h2>配置完成！</h2>
+                    <p class="step-desc">LocalMind 已准备就绪，即将进入主界面</p>
+                    <div class="complete-tips">
+                        <p><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="12" cy="12" r="9"/><line x1="12" y1="11" x2="12" y2="16"/><line x1="12" y1="8" x2="12" y2="8.01"/></svg> 提示：您可以随时在设置中修改这些配置</p>
+                        <p><svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="butt" stroke-linejoin="miter"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg> 首次进入主界面后，建议点击"扫描文档"开始处理您的资料</p>
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-primary" onclick="goToMain()">进入主界面</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="form-progress">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <div class="progress-steps">
+                    <span class="step-indicator active">1</span>
+                    <span class="step-line"></span>
+                    <span class="step-indicator">2</span>
+                    <span class="step-line"></span>
+                    <span class="step-indicator">3</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="welcome.js"></script>
+</body>
+</html>
