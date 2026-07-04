@@ -1,4 +1,5 @@
 [English readme](https://github.com/YUN2023c/LocalMind/blob/main/README-en.md)
+[下载安装包](https://github.com/YUN2023c/LocalMind/tags)
 
 > 你的知识，应该躺在你的硬盘里——而不是某个你够不着的服务器上。
 
