@@ -1,0 +1,66 @@
+# 该工作流使用了未通过 GitHub 认证的行动。
+# 它们由第三方提供，并受
+# 单独的服务条款、隐私政策和支持
+# 文档。
+
+# 此工作流程可帮助您为项目生成 SLSA 证明文件。
+# 该生成满足证明要求的第3级 - 请参阅 https://slsa.dev/spec/v0.1/requirements
+# 该项目由 OpenSSF (openssf.org) 发起，并由以下机构开发
+# https://github.com/slsa-framework/slsa-github-generator.
+# 可以使用 https://github.com/slsa-framework/slsa-verifier 验证 provenance 文件。
+# 想了解更多关于 SLSA 及其如何改善供应链的信息，请访问 slsa.dev。
+
+名称：SLSA通用生成器
+在:
+  工作流程_派发:
+  发布:
+    类型：[创建]
+
+职位:
+  构建:
+    运行于: ubuntu-latest
+    输出：
+      摘要：${{ steps.hash.outputs digests }}
+
+    步骤：
+      - 使用: actions/checkout@v4
+
+      # ========================================================
+      #
+      # 第一步：构建你的制品。
+      #
+      # ========================================================
+      - 名称: 构建产物
+        运行: |
+            # 这些是一些令人惊叹的文物。
+            回显 "artifact1" > artifact1
+            echo "artifact2" > artifact2
+
+      # ========================================================
+      #
+      # Step 2: Add a step to generate the provenance subjects
+      #         as shown below. Update the sha256 sum arguments
+      #         to include all binaries that you generate
+      #         provenance for.
+      #
+      # ========================================================
+      - name: Generate subject for provenance
+        id: hash
+        run: |
+          set -euo pipefail
+
+          # List the artifacts the provenance will refer to.
+          files=$(ls artifact*)
+          # Generate the subjects (base64 encoded).
+          echo "hashes=$(sha256sum $files | base64 -w0)" >> "${GITHUB_OUTPUT}"
+
+  provenance:
+    needs: [build]
+    permissions:
+      actions: read   # To read the workflow path.
+      id-token: write # To sign the provenance.
+      contents: write # To add assets to a release.
+    uses: slsa-framework/slsa-github-generator/.github/workflows/generator_generic_slsa3.yml@v1.4.0
+    with:
+      base64-subjects: "${{ needs.build.outputs.digests }}"
+      upload-assets: true # Optional: Upload to a new release
