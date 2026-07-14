@@ -5,7 +5,7 @@
 
 
 
-[FAQ]([https://github.com/YUN2023c/LocalMind/tags](https://github.com/YUN2023c/LocalMind/blob/main/FAQ.md))
+[FAQ](https://github.com/YUN2023c/LocalMind/blob/main/FAQ.md)
 
 > 你的知识，应该躺在你的硬盘里——而不是某个你够不着的服务器上。
 
