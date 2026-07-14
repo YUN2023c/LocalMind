@@ -1,4 +1,4 @@
-[English readme](https://github.com/YUN2023c/LocalMind/blob/main/README-en.md)
+[English README](https://github.com/YUN2023c/LocalMind/blob/main/README-en.md)
 
 
 [下载安装包](https://github.com/YUN2023c/LocalMind/tags)
