@@ -1,3 +1,28 @@
+### 一个属于你自己的本地知识管家
+
+> *你的知识，应该躺在你的硬盘里 —— 而不是某个你够不着的服务器上。*
+
+<br/>
+
+<img src="https://img.shields.io/badge/license-ISC-blue?style=flat-square" alt="License"/>
+<img src="https://img.shields.io/badge/platform-Windows-0078d4?style=flat-square&logo=windows&logoColor=white" alt="Platform"/>
+<img src="https://img.shields.io/badge/version-1.0.0-green?style=flat-square" alt="Version"/>
+<img src="https://img.shields.io/badge/Electron-42.4.1-47848F?style=flat-square&logo=electron&logoColor=white" alt="Electron"/>
+<img src="https://img.shields.io/badge/llama.cpp-powered-FF6B35?style=flat-square" alt="llama.cpp"/>
+<img src="https://img.shields.io/badge/SQLite-FTS5-003B57?style=flat-square&logo=sqlite&logoColor=white" alt="SQLite"/>
+<img src="https://img.shields.io/badge/Qwen2.5-1.5B-9B59B6?style=flat-square" alt="Qwen"/>
+<img src="https://img.shields.io/badge/offline-first-success?style=flat-square" alt="Offline"/>
+<img src="https://img.shields.io/badge/privacy-local-FFB6C1?style=flat-square" alt="Privacy"/>
+
+<br/>
+
+[GitHub](https://github.com/YUN2023c/LocalMind) · [Releases](https://github.com/YUN2023c/LocalMind/releases) · [FAQ](https://github.com/YUN2023c/LocalMind/blob/main/FAQ.md) · [Issues](https://github.com/YUN2023c/LocalMind/issues) · [Discussions](https://github.com/YUN2023c/LocalMind/discussions)
+
+</div>
+
+---
+
+
 [English README](https://github.com/YUN2023c/LocalMind/blob/main/README-en.md)
 
 
