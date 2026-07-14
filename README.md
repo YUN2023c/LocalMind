@@ -3,6 +3,10 @@
 
 [下载安装包](https://github.com/YUN2023c/LocalMind/tags)
 
+
+
+[FAQ]([https://github.com/YUN2023c/LocalMind/tags](https://github.com/YUN2023c/LocalMind/blob/main/FAQ.md))
+
 > 你的知识，应该躺在你的硬盘里——而不是某个你够不着的服务器上。
 
 这是一款一个人写的、跑在你自己电脑上的本地知识管理应用。
