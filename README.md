@@ -233,4 +233,24 @@ LocalMind 是一个**个人独立开发项目**，目前只有我一个人在维
 它带着完整的开源软件许可证声明，欢迎你阅读源码、提 Issue、提 PR——或者在它还不够好的地方毫不客气地批评我。
 
 
+## 其他标签
+local LLM, local LLM Windows, 本地跑 LLM, Windows 本地大模型,
+local LLM deployment, 本地部署大模型, run LLM locally,
+local RAG, local knowledge base, 本地知识库, 离线 RAG 知识库,
+offline AI assistant, 离线 AI 助手, offline chatbot,
+private knowledge base, 私有知识库, document Q\&A, 文档问答,
+RTX 4060 LLM, 4060 跑大模型, 4060 跑 LLM, RTX 4060 本地 AI,
+4060Ti LLM, 4060Ti 跑 LLM, RTX 4060Ti local LLM,
+RTX 3060 LLM, RTX 3090 LLM, 8GB VRAM LLM, 8GB 显存 跑大模型,
+privacy AI, 隐私 AI, data not leaving local, 数据不出本地,
+zero cost AI, 零成本 AI, free local LLM, 免费本地大模型,
+low cost local AI, 低成本本地 AI 方案,
+Qwen2.5 local, Qwen2.5 本地, Qwen2.5 1.5B Instruct,
+Llama 3 local, Llama3 中文, Llama-3.1 8B local,
+GGUF, GGUF quantization, GGUF 量化, llama.cpp,
+node-llama-cpp, Electron app, open source AI, 开源 AI,
+on-device AI, personal AI assistant, 个人 AI 助手,
+SQLite FTS5, keyword search, 关键词检索, full-text search,
+LocalMind, LocalMind FAQ, LocalMind GitHub
+
 
